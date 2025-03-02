@@ -57,7 +57,7 @@ func newMatchmakingService(config MatchmakingConfig) *matchmakingService {
 	matchmakingService := &matchmakingService{
 		competitionsInMatchmaking: make(map[int]competitionData),
 		playersInMatchmaking:      make(map[string]playerInMatchmaking),
-		competitionJoinRequests:   make(chan model.PlayerData),
+		competitionJoinRequests:   make(chan playerInMatchmaking),
 		nextCompetitionID:         1,
 		config:                    config,
 		stateMutationChan:         make(chan stateChangeNotification),
