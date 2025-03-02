@@ -25,27 +25,24 @@ type matchmakingService struct {
 	playersInMatchmaking      map[string]playerInMatchmaking
 	competitionsInMatchmaking map[int]competitionData
 
-	competitionJoinRequests chan model.PlayerData
+	competitionJoinRequests chan playerInMatchmaking
 
 	stateMutationChan chan stateChangeNotification
 }
 
 type stateChangeNotification struct {
-	origin      matchmakingStateChangeOrigin
-	competition competition.Competition
-	playerData  model.PlayerData
+	origin              matchmakingStateChangeOrigin
+	competition         competition.Competition
+	playerInMatchmaking playerInMatchmaking
 }
 
 func (m *matchmakingService) handlePlayerJoin(playerData model.PlayerData) <-chan MatchMakingNotification {
-	if _, exists := m.playersInMatchmaking[playerData.ID]; !exists {
-		matchMakingNotificationChan := make(chan MatchMakingNotification)
-		m.playersInMatchmaking[playerData.ID] = playerInMatchmaking{
-			PlayerData:                  playerData,
-			matchMakingNotificationChan: matchMakingNotificationChan,
-		}
+	matchMakingNotificationChan := make(chan MatchMakingNotification)
+	m.competitionJoinRequests <- playerInMatchmaking{
+		PlayerData:                  playerData,
+		matchMakingNotificationChan: matchMakingNotificationChan,
 	}
-	m.competitionJoinRequests <- playerData
-	return m.playersInMatchmaking[playerData.ID].matchMakingNotificationChan
+	return matchMakingNotificationChan
 }
 
 func (m *matchmakingService) listenCompetitionJoinRequest() {
@@ -86,7 +83,12 @@ func (m *matchmakingService) processMatchmakingStateMutation(stateChangeNotifica
 	notificationOrigin := stateChangeNotification.origin
 
 	if notificationOrigin == matchmakingStateChangeOrigin_PlayerAdd {
-		playerData := stateChangeNotification.playerData
+		playerData := stateChangeNotification.playerInMatchmaking.PlayerData
+
+		if _, exists := m.playersInMatchmaking[playerData.ID]; !exists {
+			m.playersInMatchmaking[playerData.ID] = stateChangeNotification.playerInMatchmaking
+		}
+
 		competition = m.handleAddingPlayerToCompetition(playerData)
 	}
 
@@ -160,10 +162,10 @@ func (m *matchmakingService) sendStateMutationCommands(stateMutationCommand stat
 	m.stateMutationChan <- stateMutationCommand
 }
 
-func (m *matchmakingService) updateMatchmakingWithPlayerJoinRequest(playerData model.PlayerData) {
+func (m *matchmakingService) updateMatchmakingWithPlayerJoinRequest(playerInMatchmaking playerInMatchmaking) {
 	m.sendStateMutationCommands(stateChangeNotification{
-		origin:     matchmakingStateChangeOrigin_PlayerAdd,
-		playerData: playerData,
+		origin:              matchmakingStateChangeOrigin_PlayerAdd,
+		playerInMatchmaking: playerInMatchmaking,
 	})
 }
 
